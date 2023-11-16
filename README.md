@@ -12,16 +12,24 @@
     git clone git@github.com:usershoislom/text-editor.git
     ```
 
-2. **Переход в директорию проекта:**
+2. **Переход в ветку dev:**
 
     ```bash
-    cd text_editor
+    git checkout dev
     ```
+
 
 3. **Установка зависимостей из файла `requirements.txt`:**
 
     ```bash
     pip install -r requirements.txt
+    ```
+
+
+4. **Переход в директорию проекта:**
+
+    ```bash
+    cd src
     ```
 
 4. **Запуск редактора:**
