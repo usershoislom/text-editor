@@ -1,230 +1,127 @@
 import tkinter as tk
-from tkinter import filedialog, font
-from tkinter import ttk
+from tkinter import filedialog, font, ttk
+from file_operations import FileOperations
+from find_replace import FindReplace
+from theme_operations import ThemeOperations
 
-last_opened_file = ""
+class TextEditor:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.title("Text Editor")
+        self.last_opened_file = ""
+        self.url = ''
+        self.fontStyle = 'Arial'
+        self.fontSize = 12
 
-url=''
-def new_file(event=None):
-    global url
-    url=''
-    text_editor.delete(0.0, tk.END)
-    root.title("Text Editor")
+        self.create_menu()
+        self.create_toolbar()
+        self.create_text_editor()
+        self.create_status_bar()
 
-def open_file(event=None):
-    global last_opened_file
-    filepath = filedialog.askopenfilename(filetypes=[("Text Files", "*.txt")])
-    if filepath:
-        with open(filepath, "r") as file:
-            text_editor.delete("1.0", tk.END)
-            text_editor.insert(tk.END, file.read())
-            last_opened_file = filepath
-            root.title(f"Text Editor - {filepath}")
-    else:
-        root.title("Text Editor")
+        self.bind_shortcuts()
 
-def save_file(event=None):
-    global last_opened_file
-    if last_opened_file:
-        with open(last_opened_file, "w") as file:
-            file.write(text_editor.get("1.0", tk.END))
-    else:
-        filepath = filedialog.asksaveasfilename(defaultextension=".txt",
-                                                filetypes=[("Text Files", "*.txt")])
-        if filepath:
-            with open(filepath, "w") as file:
-                file.write(text_editor.get("1.0", tk.END))
-            last_opened_file = filepath
-            root.title(f"Text Editor - {filepath}")  # Обновление заголовка окна с названием файла
+        self.file_operations = None
+        self.find_replace = None
+        self.theme_operations = None
 
-def exit_editor(event=None):
-    root.quit()
+    def create_menu(self):
+        self.menu_bar = tk.Menu(self.root)
 
-def move_cursor(event):
-    if event.keysym == "Home":
-        text_editor.mark_set(tk.INSERT, "1.0")
-    elif event.keysym == "End":
-        text_editor.mark_set(tk.INSERT, tk.END)
+        file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        file_menu.add_command(label='New', accelerator='Ctrl+N', command=self.file_operations.new_file)
+        file_menu.add_command(label="Open", accelerator='Ctrl+O', command=self.file_operations.open_file)
+        file_menu.add_command(label="Save", accelerator='Ctrl+S', command=self.file_operations.save_file)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", accelerator='Ctrl+Q', command=self.root.quit)
+        self.menu_bar.add_cascade(label="File", menu=file_menu)
 
-def delete_line(event):
-    text_editor.delete("insert linestart", "insert lineend+1c")
+        edit_menu = tk.Menu(self.menu_bar, tearoff=False)
+        edit_menu.add_command(label='Undo', accelerator='Ctrl+Z', compound=tk.LEFT)
+        edit_menu.add_command(label='Cut', accelerator='Ctrl+X', compound=tk.LEFT,
+                              command=lambda: self.text_editor.event_generate('<Control x>'))
+        edit_menu.add_command(label='Copy', accelerator='Ctrl+C', compound=tk.LEFT,
+                              command=lambda: self.text_editor.event_generate('<Control c>'))
+        edit_menu.add_command(label='Paste', accelerator='Ctrl+V', compound=tk.LEFT,
+                              command=lambda: self.text_editor.event_generate('<Control v>'))
+        edit_menu.add_command(label='Clear', accelerator='Ctrl+Alt+X', compound=tk.LEFT,
+                              command=lambda: self.text_editor.delete(0.0, tk.END))
+        edit_menu.add_command(label='Find', accelerator='Ctrl+F', compound=tk.LEFT, command=self.find_replace.find)
+        self.menu_bar.add_cascade(label='Edit', menu=edit_menu)
 
-def delete_word(event):
-    start = text_editor.index("insert")
-    while True:
-        prev_char = text_editor.get(f"{start}")
-        if prev_char == " " or start == "1.0":
-            break
-        start = text_editor.index(f"{start}-1c")
-    text_editor.delete(start, "insert")
+        themes_menu = tk.Menu(self.menu_bar, tearoff=False)
+        theme_choice = tk.StringVar()
+        themes_menu.add_radiobutton(label='Light Default', variable=theme_choice, compound=tk.LEFT,
+                                    command=lambda: self.theme_operations.change_theme('white', 'black'))
+        themes_menu.add_radiobutton(label='Dark', variable=theme_choice, compound=tk.LEFT,
+                                    command=lambda: self.theme_operations.change_theme('#a6ece0', '#544b3d'))
+        themes_menu.add_radiobutton(label='Pink', variable=theme_choice, compound=tk.LEFT,
+                                    command=lambda: self.theme_operations.change_theme('pink', 'blue'))
+        themes_menu.add_radiobutton(label='Monokai', variable=theme_choice, compound=tk.LEFT,
+                                    command=lambda: self.theme_operations.change_theme('orange', 'white'))
+        self.menu_bar.add_cascade(label='Themes', menu=themes_menu)
 
-def find():
-    def find_words():
-        text_editor.tag_remove('match', 1.0, tk.END)
-        start_pos = '1.0'
-        word = findentryField.get()
-        if word:
-            while True:
-                start_pos = text_editor.search(word,start_pos, stopindex = tk.END)
-                if not start_pos:
-                    break
-                end_pos = f'{start_pos}+{len(word)}c' #1.0+1c
-                text_editor.tag_add('match',start_pos,end_pos)
+        self.root.config(menu=self.menu_bar)
 
-                text_editor.tag_config('match',foreground='red',background='yellow')
-                start_pos=end_pos
+    def create_toolbar(self):
+        self.tool_bar = tk.Label(self.root)
+        self.tool_bar.pack(side=tk.TOP, fill=tk.X)
 
-    def replace_text():
-        word = findentryField.get()
-        replaceword = replaceentryField.get()
-        content = text_editor.get(1.0, tk.END)
-        new_content = content.replace(word, replaceword)
-        text_editor.delete(1.0, tk.END)
-        text_editor.insert(1.0, new_content)
-        
+        font_families = font.families()
+        self.font_family_variable = tk.StringVar()
+        font_family_combobox = ttk.Combobox(self.tool_bar, width=30, values=font_families,
+                                            state='readonly', textvariable=self.font_family_variable)
+        font_family_combobox.current(font_families.index('Arial'))
+        font_family_combobox.grid(row=0, column=0, padx=5)
+        font_family_combobox.bind('<<ComboboxSelected>>', self.find_replace.change_font_style)
 
-    root1 = tk.Toplevel()
-    root1.title('Find')
-    root1.geometry('450x250+500+200')
-    root1.resizable(0,0)
+        self.size_variable = tk.IntVar()
+        font_size_combobox = ttk.Combobox(self.tool_bar, width=14, textvariable=self.size_variable,
+                                          state='readonly', values=tuple(range(8, 81)))
+        font_size_combobox.current(4)
+        font_size_combobox.grid(row=0, column=1, padx=5)
+        font_size_combobox.bind('<<ComboboxSelected>>', self.find_replace.change_font_size)
 
-    labelFrame = tk.LabelFrame(root1,text='Find/Replace')
-    labelFrame.pack(pady=50)
+    def create_text_editor(self):
+        self.scrollbar = ttk.Scrollbar(self.root)
+        self.scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    findLabel = tk.Label(labelFrame,text='Find')
-    findLabel.grid(row=0,column=0,padx=5,pady=5)
-    findentryField = tk.Entry(labelFrame)
-    findentryField.grid(row=0,column=1,padx=5,pady=5)
+        self.text_editor = tk.Text(self.root, yscrollcommand=self.scrollbar.set, font=(self.fontStyle, self.fontSize),
+                                   undo=True)
+        self.text_editor.pack(expand=True, fill="both")
 
-    replaceLabel = tk.Label(labelFrame, text='Replace')
-    replaceLabel.grid(row=1, column=0, padx=5, pady=5)
-    replaceentryField = tk.Entry(labelFrame)
-    replaceentryField.grid(row=1, column=1, padx=5, pady=5)
+        self.scrollbar.config(command=self.text_editor.yview)
 
-    findButton = tk.Button(labelFrame,text='FIND',command=find_words)
-    findButton.grid(row=2,column=0,padx=5,pady=5)
+        self.text_editor.bind('<<Modified>>', self.find_replace.update_status_bar)
 
-    replaceButton = tk.Button(labelFrame, text='REPLACE',command=replace_text)
-    replaceButton.grid(row=2, column=1, padx=5, pady=5)
+    def create_status_bar(self):
+        self.status_bar = ttk.Label(self.root, text='Status Bar')
+        self.status_bar.pack(side=tk.BOTTOM)
 
-    def doSomething():
-        text_editor.tag_remove('match', 1.0, tk.END)
-        root1.destroy()
+    def bind_shortcuts(self):
+        self.root.bind_all("<Control-s>", self.file_operations.save_file)
+        self.root.bind_all("<Control-q>", self.exit_editor)
+        self.root.bind_all("<Control-o>", self.file_operations.open_file)
+        self.root.bind_all("<Control-u>", self.find_replace.delete_line)
+        self.root.bind_all("<Control-w>", self.find_replace.delete_word)
+        self.root.bind_all("<Control-n>", self.file_operations.new_file)
+        self.root.bind_all("<Control-f>", self.find_replace.find)
+        self.root.bind_all("<Home>", self.move_cursor)
+        self.root.bind_all("<End>", self.move_cursor)
 
-    root1.protocol('WM_DELETE_WINDOW', doSomething)
-    root1.mainloop()
+    def exit_editor(self, event=None):
+        self.root.quit()
 
-fontSize = 12
-fontStyle = 'arial'
-def font_style(event):
-    global fontStyle
-    fontStyle = font_family_variable.get()
-    text_editor.config(font=(fontStyle, fontSize))
+    def move_cursor(self, event):
+        if event.keysym == "Home":
+            self.text_editor.mark_set(tk.INSERT, "1.0")
+        elif event.keysym == "End":
+            self.text_editor.mark_set(tk.INSERT, tk.END)
 
-def font_size(event):
-    global fontSize
-    fontSize = size_variable.get()
-    text_editor.config(font=(fontStyle, fontSize))
+    def update_status_bar(self, event):
+        words = len(self.text_editor.get(0.0, tk.END).split())
+        characters = len(self.text_editor.get(0.0, 'end-1c').replace(' ', ''))
+        self.status_bar.config(text=f'Characters: {characters} Words: {words}')
+        self.text_editor.edit_modified(False)
 
-def statusBarFunction(event):
-    words = len(text_editor.get(0.0, tk.END).split())
-    characters = len(text_editor.get(0.0,'end-1c').replace(' ','')) #1.0
-    status_bar.config(text=f'Charecters: {characters} Words: {words}')
-    text_editor.edit_modified(False)
-
-def change_theme(bg_color, fg_color):
-    text_editor.config(bg=bg_color, fg=fg_color)
-
-root = tk.Tk()
-root.title("Text Editor")
-# root.resizable(False, False)
-
-menu_bar = tk.Menu(root)
-
-file_menu = tk.Menu(menu_bar, tearoff=0)
-file_menu.add_command(label='New', accelerator='Ctrl+N', command=new_file)
-file_menu.add_command(label="Open", accelerator='Ctrl+O', command=open_file)
-file_menu.add_command(label="Save", accelerator='Ctrl+S', command=save_file)
-file_menu.add_separator()
-file_menu.add_command(label="Exit", accelerator='Ctrl+Q', command=root.quit)
-
-
-menu_bar.add_cascade(label="File", menu=file_menu)
-
-
-tool_bar = tk.Label(root)
-tool_bar.pack(side=tk.TOP,fill=tk.X)
-font_families = font.families()
-font_family_variable = tk.StringVar()
-fontfamily_Combobox = ttk.Combobox(tool_bar, width=30, values=font_families, state='readonly', textvariable=font_family_variable)
-fontfamily_Combobox.current(font_families.index('Arial'))
-fontfamily_Combobox.grid(row=0, column=0, padx=5)
-size_variable = tk.IntVar()
-font_size_Combobox = ttk.Combobox(tool_bar, width=14, textvariable=size_variable, state='readonly', values=tuple(range(8,81)))
-font_size_Combobox.current(4)
-font_size_Combobox.grid(row=0, column=1, padx=5)
-
-fontfamily_Combobox.bind('<<ComboboxSelected>>',font_style)
-font_size_Combobox.bind('<<ComboboxSelected>>',font_size)
-
-# Создание поля для ввода текста
-scrollbar = ttk.Scrollbar(root)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-img = tk.PhotoImage(file='/home/shoislom/python-projects/text_editor/img1.png')
-
-text_editor = tk.Text(root, yscrollcommand=scrollbar.set, font=('arial',12), undo=True)
-text_editor.pack(expand=True, fill="both")
-
-scrollbar.config(command=text_editor.yview)
-status_bar = ttk.Label(root,text='Status Bar')
-status_bar.pack(side=tk.BOTTOM)
-text_editor.bind('<<Modified>>', statusBarFunction)
-#edit menu bar
-edit_menu = tk.Menu(menu_bar, tearoff=False)
-edit_menu.add_command(label='Undo',accelerator='Ctrl+Z', compound=tk.LEFT)
-edit_menu.add_command(label='Cut',accelerator='Ctrl+X', compound=tk.LEFT,
-                     command=lambda :text_editor.event_generate('<Control x>'))
-edit_menu.add_command(label='Copy',accelerator='Ctrl+C', compound=tk.LEFT,
-                     command=lambda :text_editor.event_generate('<Control c>'))
-edit_menu.add_command(label='Paste',accelerator='Ctrl+V', compound=tk.LEFT,
-                     command=lambda :text_editor.event_generate('<Control v>'))
-edit_menu.add_command(label='Clear',accelerator='Ctrl+Alt+X', compound=tk.LEFT,
-                     command=lambda :text_editor.delete(0.0, tk.END))
-edit_menu.add_command(label='Find',accelerator='Ctrl+F', compound=tk.LEFT, command=find)
-# edit_menu.add_command(label='Time/Date',accelerator='Ctrl+D', compound=ttk.LEFT,command=date_time)
-menu_bar.add_cascade(label='Edit',menu=edit_menu)
-
-#themes menu section
-themes_menu = tk.Menu(menu_bar, tearoff=False)
-menu_bar.add_cascade(label='Themes', menu=themes_menu)
-theme_choice = tk.StringVar()
-themes_menu.add_radiobutton(label='Light Default', variable=theme_choice,compound=tk.LEFT
-                           ,command=lambda :change_theme('white','black'))
-# themes_menu.add_radiobutton(label='Dark', variable=theme_choice,compound=tk.LEFT
-#                            ,command=lambda :change_theme('gray20','white'))
-# themes_menu.add_radiobutton(label='Pink', variable=theme_choice,compound=tk.LEFT
-#                            ,command=lambda :change_theme('pink','blue'))
-# themes_menu.add_radiobutton(label='Monokai', variable=theme_choice,compound=tk.LEFT
-#                            ,command=lambda :change_theme('orange','white'))
-themes_menu.add_radiobutton(label='Dark', variable=theme_choice,compound=tk.LEFT
-                           ,command=lambda :change_theme('#a6ece0','#544b3d'))
-themes_menu.add_radiobutton(label='Pink', variable=theme_choice,compound=tk.LEFT
-                           ,command=lambda :change_theme('pink','blue'))
-themes_menu.add_radiobutton(label='Monokai', variable=theme_choice,compound=tk.LEFT
-                           ,command=lambda :change_theme('orange','white'))
-
-
-root.bind_all("<Control-s>", save_file)
-root.bind_all("<Control-q>", exit_editor)
-root.bind_all("<Control-o>", open_file)
-root.bind_all("<Control-u>", delete_line)
-root.bind_all("<Control-w>", delete_word)
-root.bind_all("<Control-n>",new_file)
-root.bind_all("Control-f", find)
-
-root.bind_all("<Home>", move_cursor)  # Перемещение в начало строки
-root.bind_all("<End>", move_cursor)  # Перемещение в конец строки
-
-root.config(menu=menu_bar)
-root.mainloop()
+text_editor = TextEditor()
+text_editor.run()
